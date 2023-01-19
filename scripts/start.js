@@ -48,7 +48,7 @@ app.use(
 
 app.use(
 	'/cdn',
-	proxy(`https://holyubofficial.net/``, {
+	proxy(`https://holyubofficial.net/`, {
 		proxyReqPathResolver: (req) => `/cdn/${req.url}`,
 	})
 );
