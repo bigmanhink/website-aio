@@ -41,14 +41,14 @@ const app = express();
 
 app.use(
 	'/api/db',
-	proxy(`https://holyunblocker-3sxs.onrender.com/`, {
+	proxy(`https://holyubofficial.net/`, {
 		proxyReqPathResolver: (req) => `/db/${req.url}`,
 	})
 );
 
 app.use(
 	'/cdn',
-	proxy(`https://holyunblocker-3sxs.onrender.com/`, {
+	proxy(`https://holyubofficial.net/`, {
 		proxyReqPathResolver: (req) => `/cdn/${req.url}`,
 	})
 );
