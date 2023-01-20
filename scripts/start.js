@@ -49,30 +49,23 @@ if(existsSync("../ssl/key.pem") && existsSync("../ssl/cert.pem")) {
 	});
 } else server = createHttpServer()
 
-server.on('request', (req, res) => {
-	if (bare.shouldRoute(req)) {
-		bare.routeRequest(req, res);
-	} else if (shouldRouteRh(req)) {
-		routeRhRequest(req, res);
-	} else {
-		serve(req, res, (err) => {
-			res.writeHead(err?.statusCode || 500, null, {
-				"Content-Type": "text/plain",
-			});
-			res.end('Error')
-		})
-	}
-});
-
-server.on('upgrade', (req, socket, head) => {
-	if (bare.shouldRoute(req)) {
-		bare.routeUpgrade(req, socket, head);
-	} else if (shouldRouteRh(req)) {
-		routeRhUpgrade(req, socket, head);
-	} else {
-		socket.end();
-	}
-});
+server.on("request", (req, res) => {
+	if(bare.shouldRoute(req)) bare.routeRequest(req, res); else {
+	  if(req.url.startsWith("/data")) {
+	   analytics(req, res, data)
+	  } else {
+	  serve(req, res, (err) => {
+		res.writeHead(err?.statusCode || 500, null, {
+		  "Content-Type": "text/plain",
+		});
+		res.end('Error')
+	  })
+	}}
+  });
+  
+  server.on("upgrade", (req, socket, head) => {
+	if(bare.shouldRoute(req, socket, head)) bare.routeUpgrade(req, socket, head); else socket.end();
+  });
 
 const tryListen = (port) =>
 	new Promise((resolve, reject) => {
