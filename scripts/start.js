@@ -3,12 +3,11 @@ import address from 'address';
 import chalk from 'chalk';
 import { expand } from 'dotenv-expand';
 import { config } from 'dotenv-flow';
-import express from 'express';
-import proxy from 'express-http-proxy';
-import { createServer } from 'node:http';
-import { join } from 'node:path';
+import { createServer as createHttpsServer } from 'node:https';
+import { createServer as createHttpServer } from 'node:http';
 import createRammerhead from 'rammerhead/src/server/index.js';
-import { websitePath } from 'website';
+import serveStatic from "serve-static"
+import { existsSync, readFileSync } from 'node:fs';
 
 // what a dotenv in a project like this serves: .env.local file containing developer port
 expand(config());
@@ -37,34 +36,17 @@ const rammerheadSession = /^\/[a-z0-9]{32}/;
 
 console.log(`${chalk.cyan('Starting the server...')}\n`);
 
-const app = express();
-
-app.use(
-	'/api/db',
-	proxy(`https://holyunblocker-3sxs.onrender.com/`, {
-		proxyReqPathResolver: (req) => `/db/${req.url}`,
-	})
-);
-
-app.use(
-	'/cdn',
-	proxy(`https://holyunblocker-3sxs.onrender.com/`, {
-		proxyReqPathResolver: (req) => `/cdn/${req.url}`,
-	})
-);
-
-app.use(express.static(websitePath, { fallthrough: false }));
-
-app.use((error, req, res, next) => {
-	if (error.statusCode === 404)
-		return res.sendFile(join(websitePath, '404.html'));
-
-	next();
-});
-
-const server = createServer();
+var server;
 
 const bare = createBareServer('/api/bare/');
+const serve = serveStatic(fileURLToPath(new URL("../static/", import.meta.url)), { fallthrough : false });
+
+if(existsSync("../ssl/key.pem") && existsSync("../ssl/cert.pem")) {
+	server = createHttpsServer({
+		key: readFileSync("../ssl/key.pem"),
+		cert: readFileSync("../ssl/cert.pem")
+	});
+} else server = createHttpServer()
 
 server.on('request', (req, res) => {
 	if (bare.shouldRoute(req)) {
@@ -72,7 +54,12 @@ server.on('request', (req, res) => {
 	} else if (shouldRouteRh(req)) {
 		routeRhRequest(req, res);
 	} else {
-		app(req, res);
+		serve(req, res, (err) => {
+			res.writeHead(err?.statusCode || 500, null, {
+				"Content-Type": "text/plain",
+			});
+			res.end('Error')
+		})
 	}
 });
 
