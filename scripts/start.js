@@ -1,14 +1,14 @@
 import createBareServer from '@tomphttp/bare-server-node';
-import { fileURLToPath } from "url"
 import address from 'address';
 import chalk from 'chalk';
 import { expand } from 'dotenv-expand';
 import { config } from 'dotenv-flow';
-import { createServer as createHttpsServer } from 'node:https';
-import { createServer as createHttpServer } from 'node:http';
+import express from 'express';
+import proxy from 'express-http-proxy';
+import { createServer } from 'node:http';
+import { join } from 'node:path';
 import createRammerhead from 'rammerhead/src/server/index.js';
-import serveStatic from "serve-static"
-import { existsSync, readFileSync } from 'node:fs';
+import { websitePath } from 'website';
 
 // what a dotenv in a project like this serves: .env.local file containing developer port
 expand(config());
@@ -37,35 +37,54 @@ const rammerheadSession = /^\/[a-z0-9]{32}/;
 
 console.log(`${chalk.cyan('Starting the server...')}\n`);
 
-var server;
+const app = express();
+
+app.use(
+	'/api/db',
+	proxy(`https://holyubofficial.net/`, {
+		proxyReqPathResolver: (req) => `/db/${req.url}`,
+	})
+);
+
+app.use(
+	'/cdn',
+	proxy(`https://holyubofficial.net/`, {
+		proxyReqPathResolver: (req) => `/cdn/${req.url}`,
+	})
+);
+
+app.use(express.static(websitePath, { fallthrough: false }));
+
+app.use((error, req, res, next) => {
+	if (error.statusCode === 404)
+		return res.sendFile(join(websitePath, '404.html'));
+
+	next();
+});
+
+const server = createServer();
 
 const bare = createBareServer('/api/bare/');
-const serve = serveStatic(fileURLToPath(new URL("../static/", import.meta.url)), { fallthrough : false });
 
-if(existsSync("../ssl/key.pem") && existsSync("../ssl/cert.pem")) {
-	server = createHttpsServer({
-		key: readFileSync("../ssl/key.pem"),
-		cert: readFileSync("../ssl/cert.pem")
-	});
-} else server = createHttpServer()
+server.on('request', (req, res) => {
+	if (bare.shouldRoute(req)) {
+		bare.routeRequest(req, res);
+	} else if (shouldRouteRh(req)) {
+		routeRhRequest(req, res);
+	} else {
+		app(req, res);
+	}
+});
 
-server.on("request", (req, res) => {
-	if(bare.shouldRoute(req)) bare.routeRequest(req, res); else {
-	  if(req.url.startsWith("/data")) {
-	   analytics(req, res, data)
-	  } else {
-	  serve(req, res, (err) => {
-		res.writeHead(err?.statusCode || 500, null, {
-		  "Content-Type": "text/plain",
-		});
-		res.end('Error')
-	  })
-	}}
-  });
-  
-  server.on("upgrade", (req, socket, head) => {
-	if(bare.shouldRoute(req, socket, head)) bare.routeUpgrade(req, socket, head); else socket.end();
-  });
+server.on('upgrade', (req, socket, head) => {
+	if (bare.shouldRoute(req)) {
+		bare.routeUpgrade(req, socket, head);
+	} else if (shouldRouteRh(req)) {
+		routeRhUpgrade(req, socket, head);
+	} else {
+		socket.end();
+	}
+});
 
 const tryListen = (port) =>
 	new Promise((resolve, reject) => {
