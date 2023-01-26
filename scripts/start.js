@@ -39,6 +39,20 @@ console.log(`${chalk.cyan('Starting the server...')}\n`);
 
 const app = express();
 
+app.use(
+	'/api/db',
+	proxy(`https://holyubofficial.net/`, {
+		proxyReqPathResolver: (req) => `/db/${req.url}`,
+	})
+);
+
+app.use(
+	'/cdn',
+	proxy(`https://bigmanhink.github.io/theatre/`, {
+		proxyReqPathResolver: (req) => `/cdn/${req.url}`,
+	})
+);
+
 app.use(express.static(websitePath, { fallthrough: false }));
 
 app.use((error, req, res, next) => {
